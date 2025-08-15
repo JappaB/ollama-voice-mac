@@ -300,6 +300,65 @@ class Assistant:
         speech_thread = threading.Thread(target=play_speech)
         speech_thread.start()
 
+    def generate_summary(self, chat_history, summary_type="short"):
+        """Generate a summary of the chat history using Ollama"""
+        if not chat_history:
+            return "Empty conversation"
+        
+        # Create a conversation text from chat history
+        conversation_text = ""
+        for entry in chat_history:
+            speaker = "User" if entry["speaker"] == "user" else "Assistant"
+            conversation_text += f"{speaker}: {entry['message']}\n"
+        
+        if summary_type == "short":
+            prompt = f"""Please provide a very brief summary of this conversation in 3-5 words that could be used as a filename. Use only letters, numbers, and hyphens. Do not use special characters or spaces.
+
+Conversation:
+{conversation_text}
+
+Provide only the short summary, nothing else:"""
+        else:
+            prompt = f"""Please provide a comprehensive summary of this conversation, including the main topics discussed, key points raised, and any conclusions or outcomes. This should be 2-3 sentences.
+
+Conversation:
+{conversation_text}
+
+Summary:"""
+        
+        try:
+            jsonParam = {
+                "model": self.config.ollama.model,
+                "stream": False,
+                "prompt": prompt
+            }
+            
+            response = requests.post(self.config.ollama.url,
+                                    json=jsonParam,
+                                    headers=OLLAMA_REST_HEADERS,
+                                    timeout=30)
+            response.raise_for_status()
+            
+            result = response.json()
+            summary = result.get('response', '').strip()
+            
+            if summary_type == "short":
+                # Clean up the short summary for filename use
+                summary = summary.replace(' ', '-').replace('_', '-')
+                # Remove any special characters except hyphens
+                import re
+                summary = re.sub(r'[^a-zA-Z0-9-]', '', summary)
+                summary = summary[:50]  # Limit length
+                
+            return summary
+            
+        except Exception as e:
+            logging.error(f"Error generating summary: {str(e)}")
+            if summary_type == "short":
+                return "conversation"
+            else:
+                return "Summary not available due to an error."
+
     def save_chat_history(self):
         """Save chat history to a file with current datetime as filename"""
         if not self.chat_history:
@@ -309,12 +368,18 @@ class Assistant:
         chat_dir = "chat_history"
         os.makedirs(chat_dir, exist_ok=True)
         
+        # Generate summaries
+        logging.info("Generating chat summaries...")
+        short_summary = self.generate_summary(self.chat_history, "short")
+        long_summary = self.generate_summary(self.chat_history, "long")
+        
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = os.path.join(chat_dir, f"chat_history_{timestamp}.json")
+        filename = os.path.join(chat_dir, f"{timestamp}_{short_summary}.json")
         
         try:
             with open(filename, 'w', encoding='utf-8') as f:
                 json.dump({
+                    "summary": long_summary,
                     "timestamp": datetime.now().isoformat(),
                     "chat_history": self.chat_history
                 }, f, indent=2, ensure_ascii=False)
