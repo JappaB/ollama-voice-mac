@@ -77,7 +77,7 @@ class Assistant:
 
         self.text_to_speech(self.config.conversation.greeting)
         time.sleep(0.5)
-        self.display_message(self.config.messages.pressSpace)
+        self.display_ready_screen()
 
     def wait_exit(self):
         while True:
@@ -166,6 +166,62 @@ class Assistant:
         size = label.get_rect()[2:4]
         self.windowSurface.blit(label, (WIDTH/2 - size[0]/2, HEIGHT/2 - size[1]/2))
 
+        pygame.display.flip()
+
+    def display_ready_screen(self):
+        """Display the default ready screen with keybindings"""
+        logging.info("Displaying ready screen with keybindings")
+        self.windowSurface.fill(BACK_COLOR)
+        
+        help_text = [
+            "READY - KEYBINDINGS:",
+            "",
+            "SPACE - Transcribe only",
+            "A - Talk with AI",
+            "ESC - Quit and save chat history",
+        ]
+        
+        font_small = pygame.font.SysFont(None, 18)
+        y_offset = 40
+        line_height = 25
+        
+        for line in help_text:
+            if line:  # Skip empty lines for rendering but keep spacing
+                label = font_small.render(line, 1, TEXT_COLOR)
+                # Center the text horizontally
+                text_width = label.get_width()
+                x_offset = (WIDTH - text_width) // 2
+                self.windowSurface.blit(label, (x_offset, y_offset))
+            y_offset += line_height
+            
+        pygame.display.flip()
+
+    def display_help(self):
+        """Display keybindings help screen"""
+        logging.info("Displaying help screen")
+        self.windowSurface.fill(BACK_COLOR)
+        
+        help_text = [
+            "KEYBINDINGS:",
+            "",
+            "SPACE - Transcribe only",
+            "A - Talk with AI",
+            "H - Toggle this help",
+            "ESC - Quit",
+            "",
+            "Press H to close help"
+        ]
+        
+        font_small = pygame.font.SysFont(None, 18)
+        y_offset = 20
+        line_height = 22
+        
+        for line in help_text:
+            if line:  # Skip empty lines for rendering but keep spacing
+                label = font_small.render(line, 1, TEXT_COLOR)
+                self.windowSurface.blit(label, (10, y_offset))
+            y_offset += line_height
+            
         pygame.display.flip()
 
     def waveform_from_mic(self, key = pygame.K_SPACE) -> np.ndarray:
@@ -444,7 +500,7 @@ def main():
                     ass.ask_ollama(transcription, ass.text_to_speech)
 
                     time.sleep(1)
-                    ass.display_message(ass.config.messages.pressSpace)
+                    ass.display_ready_screen()
 
                 elif event.key == transcribe_only_key:
                     logging.info("Transcribe-only key pressed")
@@ -456,11 +512,12 @@ def main():
                     ass.display_message(f"Transcribed: {transcription}")
                     
                     time.sleep(3)  # Show transcription for 3 seconds
-                    ass.display_message(ass.config.messages.pressSpace)
+                    ass.display_ready_screen()
 
                 elif event.key == quit_key:
                     logging.info("Quit key pressed")
                     ass.shutdown()
+
 
 
 if __name__ == "__main__":
