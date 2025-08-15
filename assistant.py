@@ -15,6 +15,8 @@ import whisper
 import logging
 import threading
 import queue
+import os
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -42,6 +44,7 @@ class Assistant:
     def __init__(self):
         logging.info("Initializing Assistant")
         self.config = self.init_config()
+        self.chat_history = []  # Initialize chat history
 
         programIcon = pygame.image.load('assistant.png')
 
@@ -85,6 +88,7 @@ class Assistant:
 
     def shutdown(self):
         logging.info("Shutting down Assistant")
+        self.save_chat_history()  # Save chat history before shutdown
         self.audio.terminate()
         pygame.quit()
         sys.exit()
@@ -201,6 +205,14 @@ class Assistant:
                 logging.info("Transcription completed")
                 text = transcript["text"]
                 print('\nMe:\n', text.strip())
+                
+                # Add user message to chat history
+                self.chat_history.append({
+                    "timestamp": datetime.now().isoformat(),
+                    "speaker": "user",
+                    "message": text.strip()
+                })
+                
                 result_queue.put(text)
             except Exception as e:
                 logging.error(f"An error occurred during transcription: {str(e)}")
@@ -211,7 +223,6 @@ class Assistant:
         transcription_thread.join()
 
         return result_queue.get()
-
 
     def ask_ollama(self, prompt, responseCallback):
         logging.info(f"Asking OLLaMa with prompt: {prompt}")
@@ -256,10 +267,16 @@ class Assistant:
             logging.error(f"An error occurred while asking OLLaMa: {str(e)}")
             responseCallback("Sorry, an error occurred. Please try again.")
 
-
     def text_to_speech(self, text):
         logging.info(f"Converting text to speech: {text}")
         print('\nAI:\n', text.strip())
+        
+        # Add AI response to chat history
+        self.chat_history.append({
+            "timestamp": datetime.now().isoformat(),
+            "speaker": "assistant",
+            "message": text.strip()
+        })
 
         def play_speech():
             try:
@@ -283,6 +300,27 @@ class Assistant:
         speech_thread = threading.Thread(target=play_speech)
         speech_thread.start()
 
+    def save_chat_history(self):
+        """Save chat history to a file with current datetime as filename"""
+        if not self.chat_history:
+            return
+        
+        # Create chat_history directory if it doesn't exist
+        chat_dir = "chat_history"
+        os.makedirs(chat_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = os.path.join(chat_dir, f"chat_history_{timestamp}.json")
+        
+        try:
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump({
+                    "timestamp": datetime.now().isoformat(),
+                    "chat_history": self.chat_history
+                }, f, indent=2, ensure_ascii=False)
+            logging.info(f"Chat history saved to {filename}")
+        except Exception as e:
+            logging.error(f"Error saving chat history: {str(e)}")
 
 def main():
     logging.info("Starting Assistant")
