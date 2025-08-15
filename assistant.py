@@ -45,6 +45,7 @@ class Assistant:
         logging.info("Initializing Assistant")
         self.config = self.init_config()
         self.chat_history = []  # Initialize chat history
+        self.transcriptions = []  # Initialize transcription-only history
 
         programIcon = pygame.image.load('assistant.png')
 
@@ -224,6 +225,38 @@ class Assistant:
 
         return result_queue.get()
 
+    def transcribe_only(self, waveform):
+        """Transcribe speech without sending to Ollama or adding to chat history"""
+        logging.info("Converting speech to text (transcription only)")
+        result_queue = queue.Queue()
+
+        def transcribe_speech():
+            try:
+                logging.info("Starting transcription (no chat history)")
+                transcript = self.model.transcribe(waveform,
+                                                language=self.config.whisperRecognition.lang,
+                                                fp16=torch.cuda.is_available())
+                logging.info("Transcription completed")
+                text = transcript["text"]
+                print('\n[TRANSCRIPTION ONLY]\nMe:\n', text.strip())
+                
+                # Add transcription to transcriptions list
+                self.transcriptions.append({
+                    "timestamp": datetime.now().isoformat(),
+                    "transcription": text.strip()
+                })
+                
+                result_queue.put(text)
+            except Exception as e:
+                logging.error(f"An error occurred during transcription: {str(e)}")
+                result_queue.put("")
+
+        transcription_thread = threading.Thread(target=transcribe_speech)
+        transcription_thread.start()
+        transcription_thread.join()
+
+        return result_queue.get()
+
     def ask_ollama(self, prompt, responseCallback):
         logging.info(f"Asking OLLaMa with prompt: {prompt}")
         full_prompt = prompt if hasattr(self, "contextSent") else (prompt)
@@ -312,7 +345,7 @@ class Assistant:
             conversation_text += f"{speaker}: {entry['message']}\n"
         
         if summary_type == "short":
-            prompt = f"""Please provide a very brief summary of this conversation in 3-5 words that could be used as a filename. Use only letters, numbers, and hyphens. Do not use special characters or spaces.
+            prompt = f"""Please provide a very brief summary of this conversation in 3-12 words that could be used as a filename. Use only letters, numbers, and hyphens. Do not use special characters or spaces.
 
 Conversation:
 {conversation_text}
@@ -360,8 +393,8 @@ Summary:"""
                 return "Summary not available due to an error."
 
     def save_chat_history(self):
-        """Save chat history to a file with current datetime as filename"""
-        if not self.chat_history:
+        """Save chat history and transcriptions to a file with current datetime as filename"""
+        if not self.chat_history and not self.transcriptions:
             return
         
         # Create chat_history directory if it doesn't exist
@@ -381,9 +414,10 @@ Summary:"""
                 json.dump({
                     "summary": long_summary,
                     "timestamp": datetime.now().isoformat(),
-                    "chat_history": self.chat_history
+                    "chat_history": self.chat_history,
+                    "transcriptions": self.transcriptions
                 }, f, indent=2, ensure_ascii=False)
-            logging.info(f"Chat history saved to {filename}")
+            logging.info(f"Chat history and transcriptions saved to {filename}")
         except Exception as e:
             logging.error(f"Error saving chat history: {str(e)}")
 
@@ -393,22 +427,35 @@ def main():
 
     ass = Assistant()
 
-    push_to_talk_key = pygame.K_SPACE
+    push_to_talk_with_agent_key = pygame.K_a
+    transcribe_only_key = pygame.K_SPACE
     quit_key = pygame.K_ESCAPE
 
     while True:
         ass.clock.tick(60)
         for event in pygame.event.get():
             if event.type == pygame.KEYDOWN:
-                if event.key == push_to_talk_key:
-                    logging.info("Push-to-talk key pressed")
-                    speech = ass.waveform_from_mic(push_to_talk_key)
+                if event.key == push_to_talk_with_agent_key:
+                    logging.info("Push-to-talk-with-agent key pressed")
+                    speech = ass.waveform_from_mic(push_to_talk_with_agent_key)
 
                     transcription = ass.speech_to_text(waveform=speech)
 
                     ass.ask_ollama(transcription, ass.text_to_speech)
 
                     time.sleep(1)
+                    ass.display_message(ass.config.messages.pressSpace)
+
+                elif event.key == transcribe_only_key:
+                    logging.info("Transcribe-only key pressed")
+                    speech = ass.waveform_from_mic(transcribe_only_key)
+                    
+                    transcription = ass.transcribe_only(waveform=speech)
+                    
+                    # Display the transcription on screen
+                    ass.display_message(f"Transcribed: {transcription}")
+                    
+                    time.sleep(3)  # Show transcription for 3 seconds
                     ass.display_message(ass.config.messages.pressSpace)
 
                 elif event.key == quit_key:
