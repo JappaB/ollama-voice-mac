@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ollama-voice"
+version = "0.1.0"
+description = "Local speech-to-text and TTS using Whisper, Ollama, and pyttsx3"
+dependencies = [
+    "torch>=2.3.0",
+    "torchvision>=0.18.0",
+    "torchaudio>=2.3.0",
+    "pyttsx3>=2.90",
+    "blobfile>=2.1.1",
+    "openai>=1.30.0",
+    "Wave>=0.0.2",
+    "openai-whisper @ git+https://github.com/openai/whisper.git",
+    "PyAudio>=0.2.14",
+    "PyYAML>=6.0.1",
+    "pygame>=2.5.2",
+    "soundfile>=0.12.1",
+    "pyObjC>=10.0",
+    "numpy>=1.24.0,<2.0.0",
+    "setuptools>=65.0.0"
+]
