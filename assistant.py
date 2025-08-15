@@ -389,16 +389,24 @@ class Assistant:
         speech_thread = threading.Thread(target=play_speech)
         speech_thread.start()
 
-    def generate_summary(self, chat_history, summary_type="short"):
-        """Generate a summary of the chat history using Ollama"""
-        if not chat_history:
+    def generate_summary(self, summary_type="short"):
+        """Generate a summary of the chat history and transcriptions using Ollama"""
+        if not self.chat_history and not self.transcriptions:
             return "Empty conversation"
         
-        # Create a conversation text from chat history
+        # Create a conversation text from chat history and transcriptions
         conversation_text = ""
-        for entry in chat_history:
+        
+        # Add chat history
+        for entry in self.chat_history:
             speaker = "User" if entry["speaker"] == "user" else "Assistant"
             conversation_text += f"{speaker}: {entry['message']}\n"
+        
+        # Add transcriptions if any exist
+        if self.transcriptions:
+            conversation_text += "\nTranscriptions (without AI responses):\n"
+            for entry in self.transcriptions:
+                conversation_text += f"User (transcription only): {entry['transcription']}\n"
         
         if summary_type == "short":
             prompt = f"""Please provide a very brief summary of this conversation in 3-12 words that could be used as a filename. Use only letters, numbers, and hyphens. Do not use special characters or spaces.
@@ -408,7 +416,7 @@ Conversation:
 
 Provide only the short summary, nothing else:"""
         else:
-            prompt = f"""Please provide a comprehensive summary of this conversation, including the main topics discussed, key points raised, and any conclusions or outcomes. This should be 2-3 sentences.
+            prompt = f"""Please provide a comprehensive summary of this conversation, including the main topics discussed, key points raised, and any conclusions or outcomes. Include both full conversations and transcription-only entries. This should be 2-5 sentences.
 
 Conversation:
 {conversation_text}
@@ -459,8 +467,8 @@ Summary:"""
         
         # Generate summaries
         logging.info("Generating chat summaries...")
-        short_summary = self.generate_summary(self.chat_history, "short")
-        long_summary = self.generate_summary(self.chat_history, "long")
+        short_summary = self.generate_summary("short")
+        long_summary = self.generate_summary("long")
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = os.path.join(chat_dir, f"{timestamp}_{short_summary}.json")
